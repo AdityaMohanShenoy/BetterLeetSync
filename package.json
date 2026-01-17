@@ -1,0 +1,20 @@
+{
+  "name": "betterleet-sync",
+  "version": "1.0.0",
+  "description": "LeetCode solution sync to GitHub",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "cd backend && node server.js"
+  },
+  "keywords": ["leetcode", "github", "sync"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "domutils": "^3.1.0",
+    "express": "^4.21.2",
+    "htmlparser2": "^9.1.0"
+  }
+}
