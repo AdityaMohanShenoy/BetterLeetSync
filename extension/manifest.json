@@ -21,7 +21,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["pageBridge.js"],
+      "resources": ["pageBridge.js", "bulkSyncInject.js"],
       "matches": ["https://leetcode.com/*"]
     }
   ],

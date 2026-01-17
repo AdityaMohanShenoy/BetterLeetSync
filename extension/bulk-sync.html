@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Bulk Sync - BetterLeetSync</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+      color: white;
+      padding: 40px 20px;
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    
+    h1 {
+      color: #FFA116;
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+    
+    .subtitle {
+      color: #999;
+      font-size: 14px;
+    }
+    
+    .card {
+      background: #2d2d2d;
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 20px;
+      border: 1px solid #3a3a3a;
+    }
+    
+    .info {
+      margin-bottom: 30px;
+      color: #ccc;
+      line-height: 1.6;
+    }
+    
+    .warning {
+      background: rgba(255, 161, 22, 0.1);
+      border-left: 4px solid #FFA116;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    
+    .warning strong {
+      color: #FFA116;
+    }
+    
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 15px;
+      background: #FFA116;
+      color: #1a1a1a;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .btn:hover:not(:disabled) {
+      background: #FFB84D;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(255, 161, 22, 0.4);
+    }
+    
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    
+    #progress-container {
+      display: none;
+      margin-top: 30px;
+    }
+    
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #3a3a3a;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 15px;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #FFA116 0%, #FFB84D 100%);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+    
+    .progress-text {
+      color: #FFA116;
+      font-size: 14px;
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+    
+    #log-container {
+      background: #1a1a1a;
+      border-radius: 6px;
+      padding: 15px;
+      max-height: 400px;
+      overflow-y: auto;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    
+    .log-entry {
+      margin-bottom: 8px;
+      padding: 4px 0;
+    }
+    
+    .log-success {
+      color: #00b8a3;
+    }
+    
+    .log-error {
+      color: #ef4743;
+    }
+    
+    .log-info {
+      color: #ccc;
+    }
+    
+    .summary {
+      margin-top: 20px;
+      padding: 20px;
+      background: rgba(0, 184, 163, 0.1);
+      border-radius: 8px;
+      border: 1px solid #00b8a3;
+    }
+    
+    .summary h3 {
+      color: #00b8a3;
+      margin-bottom: 10px;
+    }
+    
+    .summary-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      margin-top: 15px;
+    }
+    
+    .stat {
+      text-align: center;
+    }
+    
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #FFA116;
+    }
+    
+    .stat-label {
+      font-size: 12px;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Bulk Sync</h1>
+      <div class="subtitle">Sync all your solved LeetCode problems at once</div>
+    </div>
+    
+    <div class="card">
+      <div class="info">
+        <p><strong>This feature will:</strong></p>
+        <ul style="margin-left: 20px; margin-top: 10px;">
+          <li>Fetch all your solved problems from LeetCode</li>
+          <li>Download your last accepted submission for each problem</li>
+          <li>Sync everything to your GitHub repository</li>
+        </ul>
+      </div>
+      
+      <div class="warning">
+        <strong>⚠️ Important:</strong> Make sure you're logged into LeetCode. This may take several minutes depending on how many problems you've solved. Please keep this tab open during the process.
+      </div>
+      
+      <button id="start-btn" class="btn">Start Bulk Sync</button>
+      
+      <div id="progress-container">
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <div class="progress-text" id="progress-text">Initializing...</div>
+        <div id="log-container"></div>
+        <div id="summary" style="display: none;"></div>
+      </div>
+    </div>
+  </div>
+  
+  <script src="bulkSyncPage.js"></script>
+</body>
+</html>

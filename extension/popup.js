@@ -243,4 +243,51 @@ document.addEventListener('DOMContentLoaded', () => {
   if (syncBtn) {
     syncBtn.addEventListener('click', syncCurrentProblem);
   }
+  
+  const bulkSyncBtn = document.getElementById('bulk-sync-btn');
+  if (bulkSyncBtn) {
+    bulkSyncBtn.addEventListener('click', startBulkSyncFromPopup);
+  }
 });
+
+async function startBulkSyncFromPopup() {
+  const bulkSyncBtn = document.getElementById('bulk-sync-btn');
+  const syncStatusEl = document.getElementById('sync-status');
+  
+  // Open LeetCode in a new tab and inject bulk sync
+  syncStatusEl.textContent = 'Opening LeetCode...';
+  syncStatusEl.className = 'status';
+  
+  try {
+    // First check if there's already a LeetCode tab
+    const tabs = await chrome.tabs.query({ url: 'https://leetcode.com/*' });
+    
+    let targetTab;
+    if (tabs.length > 0) {
+      targetTab = tabs[0];
+      await chrome.tabs.update(targetTab.id, { active: true });
+    } else {
+      // Open LeetCode
+      targetTab = await chrome.tabs.create({ url: 'https://leetcode.com/problemset/' });
+      // Wait for page to load
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+    
+    // Inject and run bulk sync
+    syncStatusEl.textContent = 'Starting bulk sync on LeetCode tab...';
+    
+    await chrome.scripting.executeScript({
+      target: { tabId: targetTab.id },
+      files: ['bulkSyncInject.js']
+    });
+    
+    syncStatusEl.textContent = 'Bulk sync started! Check the LeetCode tab.';
+    syncStatusEl.className = 'status connected';
+    
+  } catch (error) {
+    console.error('Bulk sync error:', error);
+    syncStatusEl.textContent = `Error: ${error.message}`;
+    syncStatusEl.className = 'status disconnected';
+  }
+}
+
