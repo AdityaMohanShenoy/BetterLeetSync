@@ -5,6 +5,12 @@
       "name": "Best Time to Buy and Sell Stock II",
       "difficulty": "Medium",
       "sent_at": "2026-01-17T11:22:18.105Z"
+    },
+    {
+      "slug": "concatenation-of-array",
+      "name": "Concatenation of Array",
+      "difficulty": "Easy",
+      "sent_at": "2026-01-18T07:27:34.437Z"
     }
   ]
 }
