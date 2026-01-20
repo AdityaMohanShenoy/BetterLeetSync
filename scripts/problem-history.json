@@ -17,6 +17,12 @@
       "name": "Uncommon Words from Two Sentences",
       "difficulty": "Easy",
       "sent_at": "2026-01-19T07:37:05.233Z"
+    },
+    {
+      "slug": "valid-palindrome",
+      "name": "Valid Palindrome",
+      "difficulty": "Easy",
+      "sent_at": "2026-01-20T07:36:30.805Z"
     }
   ]
 }
