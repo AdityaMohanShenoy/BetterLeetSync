@@ -23,6 +23,12 @@
       "name": "Valid Palindrome",
       "difficulty": "Easy",
       "sent_at": "2026-01-20T07:36:30.805Z"
+    },
+    {
+      "slug": "find-if-array-can-be-sorted",
+      "name": "Find if Array Can Be Sorted",
+      "difficulty": "Medium",
+      "sent_at": "2026-01-22T07:35:29.090Z"
     }
   ]
 }
