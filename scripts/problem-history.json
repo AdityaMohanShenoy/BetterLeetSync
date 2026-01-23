@@ -29,6 +29,12 @@
       "name": "Find if Array Can Be Sorted",
       "difficulty": "Medium",
       "sent_at": "2026-01-22T07:35:29.090Z"
+    },
+    {
+      "slug": "isomorphic-strings",
+      "name": "Isomorphic Strings",
+      "difficulty": "Easy",
+      "sent_at": "2026-01-23T07:33:59.811Z"
     }
   ]
 }
