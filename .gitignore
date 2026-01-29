@@ -25,6 +25,12 @@ logs/
 # Extension build
 extension.zip
 
+# User-specific tracking data (tracked in solutions repo instead)
+scripts/problem-history.json
+
 # Temporary files
 *.tmp
 temp/
+
+# User-specific data (should not be in version control)
+scripts/problem-history.json

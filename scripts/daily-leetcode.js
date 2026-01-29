@@ -4,7 +4,7 @@ const nodemailer = require('nodemailer');
 
 // Configuration
 const SOLUTIONS_PATH = path.join(__dirname, '../../solutions');
-const HISTORY_FILE = path.join(__dirname, 'problem-history.json');
+const HISTORY_FILE = path.join(SOLUTIONS_PATH, 'email-history.json'); // Store in solutions repo
 const DAYS_BEFORE_REPEAT = 10;
 
 // SMTP configuration
@@ -49,7 +49,13 @@ function loadHistory() {
 
 // Save problem history
 function saveHistory(history) {
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
+  try {
+    fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
+    console.log('History saved to solutions repo');
+  } catch (error) {
+    console.error('Error saving history:', error);
+    throw error;
+  }
 }
 
 // Load index.json from solutions repository
