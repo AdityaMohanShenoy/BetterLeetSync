@@ -194,10 +194,22 @@
         throw new Error('HMAC secret not configured. Please set it in extension options.');
       }
 
+      // Extract current slug from URL for verification
+      const urlSlug = window.location.pathname.match(/\/problems\/([^\/]+)/)?.[1];
+      if (!urlSlug) {
+        throw new Error('Could not determine problem from URL.');
+      }
+      console.log('BetterLeetSync: URL slug:', urlSlug);
+
       const problemData = extractProblemData();
       console.log('BetterLeetSync: Problem data:', problemData?.slug);
       if (!problemData) {
         throw new Error('Could not extract problem data. Try refreshing the page.');
+      }
+
+      // CRITICAL: Verify that extracted data matches the current URL
+      if (problemData.slug !== urlSlug) {
+        throw new Error(`Page data mismatch! URL shows "${urlSlug}" but extracted "${problemData.slug}". Please wait a moment for the page to fully load, then try again.`);
       }
 
       const codeData = await extractCode();
@@ -212,6 +224,7 @@
 
       console.log('BetterLeetSync: Extracted code length:', codeData.code.length);
       console.log('BetterLeetSync: Detected language:', codeData.language);
+      console.log('BetterLeetSync: ✓ Verification passed - data matches current page');
 
       const payload = {
         slug: problemData.slug,
