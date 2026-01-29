@@ -283,7 +283,7 @@ async function createOrUpdateFile(path, content, message) {
 // Sync endpoint
 app.post('/sync', verifyHMAC, async (req, res) => {
   try {
-    const { slug, title, difficulty, topics, description_html, code, language, source_url } = req.body;
+    const { slug, title, difficulty, topics, description_html, code, language, source_url, skipIndex } = req.body;
 
     // Validate required fields
     if (!slug || !title || !difficulty || !code || !language) {
@@ -317,10 +317,7 @@ app.post('/sync', verifyHMAC, async (req, res) => {
     // Get current date for date_solved
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
-    // Get current index
-    const { items: indexItems, sha: indexSha } = await getIndex();
-
-    // Prepare new index item
+    // Prepare new index item (for response, even if skipIndex is true)
     const newIndexItem = {
       slug,
       name: title,
@@ -334,18 +331,11 @@ app.post('/sync', verifyHMAC, async (req, res) => {
     const existingSolution = await getFileContent(solutionPath);
     const solutionChanged = !existingSolution || existingSolution.content !== solutionContent;
 
-    // Check if index needs update
-    const existingIndexItem = indexItems.find(i => i.slug === slug);
-    const indexNeedsUpdate = !existingIndexItem || 
-      existingIndexItem.name !== title ||
-      existingIndexItem.difficulty !== difficulty ||
-      JSON.stringify(existingIndexItem.topics) !== JSON.stringify(topics || []) ||
-      existingIndexItem.path !== solutionPath;
-
-    if (!solutionChanged && !indexNeedsUpdate) {
+    if (!solutionChanged && skipIndex) {
       return res.json({ 
         success: true, 
-        no_change: true, 
+        no_change: true,
+        indexItem: newIndexItem,
         message: 'No changes detected' 
       });
     }
@@ -359,24 +349,110 @@ app.post('/sync', verifyHMAC, async (req, res) => {
       );
     }
 
-    // Update index.json
-    const updatedItems = updateIndexItems(indexItems, newIndexItem);
-    const indexContent = JSON.stringify({ items: updatedItems }, null, 2);
-    
-    await createOrUpdateFile(
-      'index.json',
-      indexContent,
-      `Update index: ${title}`
-    );
+    // Update index.json (unless skipIndex is true for bulk sync)
+    if (!skipIndex) {
+      const { items: indexItems } = await getIndex();
+      
+      // Check if index needs update
+      const existingIndexItem = indexItems.find(i => i.slug === slug);
+      const indexNeedsUpdate = !existingIndexItem || 
+        existingIndexItem.name !== title ||
+        existingIndexItem.difficulty !== difficulty ||
+        JSON.stringify(existingIndexItem.topics) !== JSON.stringify(topics || []) ||
+        existingIndexItem.path !== solutionPath;
+
+      if (indexNeedsUpdate) {
+        const updatedItems = updateIndexItems(indexItems, newIndexItem);
+        const indexContent = JSON.stringify({ items: updatedItems }, null, 2);
+        
+        await createOrUpdateFile(
+          'index.json',
+          indexContent,
+          `Update index: ${title}`
+        );
+      }
+    }
 
     res.json({
       success: true,
       path: solutionPath,
+      indexItem: newIndexItem,
       message: `Synced: ${title}`
     });
 
   } catch (error) {
     console.error('Sync error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Batch update index endpoint (for bulk sync)
+app.post('/update-index', verifyHMAC, async (req, res) => {
+  try {
+    const { items } = req.body;
+
+    if (!items || !Array.isArray(items)) {
+      return res.status(400).json({ 
+        error: 'Missing required field: items (array)' 
+      });
+    }
+
+    // Validate GitHub config
+    if (!GITHUB_TOKEN || !GITHUB_OWNER || !GITHUB_REPO) {
+      return res.status(500).json({ 
+        error: 'Server not configured: missing GitHub credentials' 
+      });
+    }
+
+    // Get current index
+    const { items: currentItems } = await getIndex();
+
+    // Merge new items with existing items
+    let updatedItems = [...currentItems];
+    for (const newItem of items) {
+      updatedItems = updateIndexItems(updatedItems, newItem);
+    }
+
+    // Write updated index
+    const indexContent = JSON.stringify({ items: updatedItems }, null, 2);
+    await createOrUpdateFile(
+      'index.json',
+      indexContent,
+      `Bulk update index: ${items.length} problem(s)`
+    );
+
+    res.json({
+      success: true,
+      count: items.length,
+      message: `Updated index with ${items.length} problem(s)`
+    });
+
+  } catch (error) {
+    console.error('Update index error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get existing slugs from index (for filtering bulk sync)
+app.get('/index-slugs', async (req, res) => {
+  try {
+    // Validate GitHub config
+    if (!GITHUB_TOKEN || !GITHUB_OWNER || !GITHUB_REPO) {
+      return res.status(500).json({ 
+        error: 'Server not configured: missing GitHub credentials' 
+      });
+    }
+
+    const { items } = await getIndex();
+    const slugs = items.map(item => item.slug);
+    
+    res.json({ 
+      success: true,
+      slugs: slugs,
+      count: slugs.length
+    });
+  } catch (error) {
+    console.error('Get index slugs error:', error);
     res.status(500).json({ error: error.message });
   }
 });

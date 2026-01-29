@@ -358,7 +358,7 @@
   }
 
   // Sync single problem
-  async function syncProblem(titleSlug, settings, ui) {
+  async function syncProblem(titleSlug, settings, ui, skipIndex = false) {
     ui.addLog(`  Fetching details for ${titleSlug}...`, 'info');
     
     const details = await getProblemDetails(titleSlug);
@@ -381,7 +381,8 @@
       description_html: details.content,
       code: submission.code,
       language: submission.lang,
-      source_url: `https://leetcode.com/problems/${titleSlug}/`
+      source_url: `https://leetcode.com/problems/${titleSlug}/`,
+      skipIndex: skipIndex  // Skip index update during bulk sync
     };
 
     const timestamp = Math.floor(Date.now() / 1000).toString();
@@ -403,12 +404,65 @@
       throw new Error(error.error || 'Sync failed');
     }
 
-    return details.title;
+    const result = await response.json();
+    return {
+      title: details.title,
+      indexItem: result.indexItem  // Return index item for batch update
+    };
+  }
+
+  // Batch update index with all synced items
+  async function updateIndexBatch(items, settings, ui) {
+    ui.addLog('Updating index.json with all synced problems...', 'info');
+
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const body = JSON.stringify({ items });
+    const signature = await generateSignature(settings.hmacSecret, timestamp, body);
+
+    const response = await fetch(`${settings.backendUrl}/update-index`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Timestamp': timestamp,
+        'X-Signature': signature
+      },
+      body
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Index update failed');
+    }
+
+    const result = await response.json();
+    ui.addLog(`✓ Index updated with ${result.count} problem(s)`, 'success');
+  }
+
+  // Fetch existing slugs from index to skip already-synced problems
+  async function getExistingSlugs(settings, ui) {
+    ui.addLog('Checking already synced problems...', 'info');
+    
+    try {
+      const response = await fetch(`${settings.backendUrl}/index-slugs`);
+      
+      if (!response.ok) {
+        ui.addLog('⚠️ Could not fetch existing index, will sync all problems', 'info');
+        return new Set();
+      }
+      
+      const data = await response.json();
+      ui.addLog(`Found ${data.count} already synced problems`, 'info');
+      return new Set(data.slugs);
+    } catch (error) {
+      ui.addLog('⚠️ Could not fetch existing index, will sync all problems', 'info');
+      return new Set();
+    }
   }
 
   // Main function
   async function main() {
     const ui = createUI();
+    const indexItems = [];  // Collect index items for batch update
     
     try {
       // Get settings from extension storage
@@ -423,29 +477,47 @@
         throw new Error('HMAC secret not configured. Please set it in extension options.');
       }
 
+      // Fetch existing slugs to skip already-synced problems
+      const existingSlugs = await getExistingSlugs(settings, ui);
+
       ui.addLog('Fetching solved problems...', 'info');
-      const problems = await getSolvedProblems();
+      const allProblems = await getSolvedProblems();
       
-      if (problems.length === 0) {
+      if (allProblems.length === 0) {
         ui.addLog('No solved problems found.', 'info');
         ui.showSummary(0, 0);
         return;
       }
 
-      ui.addLog(`Found ${problems.length} solved problems`, 'info');
+      // Filter out already-synced problems
+      const problems = allProblems.filter(p => !existingSlugs.has(p.titleSlug));
+      const skipped = allProblems.length - problems.length;
+      
+      if (skipped > 0) {
+        ui.addLog(`Skipping ${skipped} already synced problem(s)`, 'info');
+      }
+
+      if (problems.length === 0) {
+        ui.addLog('All problems are already synced!', 'success');
+        ui.showSummary(0, 0);
+        return;
+      }
+
+      ui.addLog(`Found ${problems.length} new problem(s) to sync`, 'info');
       ui.updateProgress(0, `Starting sync of ${problems.length} problems...`);
 
       let synced = 0, failed = 0;
 
       for (let i = 0; i < problems.length; i++) {
         const problem = problems[i];
-        const progress = Math.round((i / problems.length) * 100);
+        const progress = Math.round((i / problems.length) * 95);  // Reserve 5% for index update
         ui.updateProgress(progress, `[${i + 1}/${problems.length}] Processing ${problem.titleSlug}...`);
 
         try {
-          const title = await syncProblem(problem.titleSlug, settings, ui);
+          const result = await syncProblem(problem.titleSlug, settings, ui, true);  // skipIndex = true
           synced++;
-          ui.addLog(`✓ ${title}`, 'success');
+          indexItems.push(result.indexItem);  // Collect for batch update
+          ui.addLog(`✓ ${result.title}`, 'success');
         } catch (error) {
           failed++;
           ui.addLog(`✗ ${problem.title}: ${error.message}`, 'error');
@@ -459,11 +531,28 @@
 
       ui.updateProgress(100, 'Complete!');
       ui.showSummary(synced, failed);
-      ui.addLog(`\nBulk sync finished! Synced: ${synced}, Failed: ${failed}`, synced > 0 ? 'success' : 'info');
+      ui.addLog(`\nBulk sync finished! Synced: ${synced}, Failed: ${failed}, Skipped: ${skipped}`, synced > 0 ? 'success' : 'info');
 
     } catch (error) {
       ui.addLog(`Error: ${error.message}`, 'error');
     } finally {
+      // ALWAYS update index with whatever was successfully synced, even if error occurred
+      if (indexItems.length > 0) {
+        try {
+          const settings = await new Promise(resolve => {
+            chrome.storage.sync.get({
+              backendUrl: 'http://localhost:3456',
+              hmacSecret: ''
+            }, resolve);
+          });
+          
+          ui.updateProgress(95, 'Updating index.json...');
+          await updateIndexBatch(indexItems, settings, ui);
+        } catch (error) {
+          ui.addLog(`✗ Failed to update index: ${error.message}`, 'error');
+        }
+      }
+      
       window.__betterLeetSyncBulkRunning = false;
     }
   }

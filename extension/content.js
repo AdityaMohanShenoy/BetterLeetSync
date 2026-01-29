@@ -30,6 +30,7 @@
 
       const timer = setTimeout(() => {
         window.removeEventListener('message', onMessage);
+        console.warn('BetterLeetSync: Page bridge timeout after', timeoutMs, 'ms');
         resolve(null);
       }, timeoutMs);
 
@@ -42,14 +43,20 @@
         window.removeEventListener('message', onMessage);
 
         if (data.ok && data.code) {
+          console.log('BetterLeetSync: Page bridge returned code, length:', data.code.length);
           resolve({ code: data.code, language: data.language || 'unknown' });
         } else {
+          console.warn('BetterLeetSync: Page bridge error:', data.error);
           resolve(null);
         }
       }
 
       window.addEventListener('message', onMessage);
-      window.postMessage({ type: BRIDGE_REQ_TYPE, requestId }, '*');
+      
+      // Post message after a short delay to ensure bridge script is loaded
+      setTimeout(() => {
+        window.postMessage({ type: BRIDGE_REQ_TYPE, requestId }, '*');
+      }, 100);
     });
   }
 
@@ -141,101 +148,23 @@
     }
   }
 
-  // Extract code from Monaco editor
+  // Extract code from Monaco editor - ALWAYS use page bridge since Monaco is in main world
   async function extractCode() {
     try {
-      console.log('BetterLeetSync: Starting code extraction...');
-      console.log('BetterLeetSync: Monaco available?', !!window.monaco);
-      console.log('BetterLeetSync: Monaco editor available?', !!window.monaco?.editor);
+      console.log('BetterLeetSync: Starting code extraction via page bridge...');
       
-      // Try multiple methods to get the code
-      
-      // Method 1: Monaco editor API - get all models
-      if (window.monaco && window.monaco.editor) {
-        const models = window.monaco.editor.getModels();
-        console.log('BetterLeetSync: Found', models?.length, 'Monaco models');
-        
-        if (models && models.length > 0) {
-          // Log all models for debugging
-          let candidateModel = null;
-          let maxCodeLength = 0;
-          
-          models.forEach((model, idx) => {
-            const lang = model.getLanguageId();
-            const uri = model.uri?.path || model.uri?.toString() || 'unknown';
-            const code = model.getValue();
-            const length = code.length;
-            console.log(`  Model ${idx}: ${lang}, URI: ${uri}, Length: ${length}`);
-            console.log(`  First 50 chars: ${code.substring(0, 50)}`);
-            
-            // Skip obvious non-code models
-            if (uri.includes('codicon') || code.includes('.codicon-') || 
-                lang === 'css' || lang === 'html' || lang === 'json') {
-              console.log(`  -> Skipping (non-code)`);
-              return;
-            }
-            
-            // If it has reasonable length and language, consider it
-            if (length > maxCodeLength && length < 100000) {
-              candidateModel = { model, lang, code };
-              maxCodeLength = length;
-              console.log(`  -> New candidate (length: ${length})`);
-            }
-          });
-
-          if (candidateModel) {
-            const { code, lang } = candidateModel;
-            console.log('BetterLeetSync: Selected model with language:', lang);
-            console.log('BetterLeetSync: Code length:', code.length);
-            return { code, language: lang };
-          }
-        }
-      }
-
-      // Method 1b: If Monaco isn't visible in the content-script world (common on LeetCode),
-      // request code via page bridge running in the main world.
+      // Ensure page bridge is injected
       ensurePageBridgeInjected();
-      const bridged = await requestCodeFromPageBridge();
+      
+      // Wait a bit longer for page bridge to be ready
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Request code via page bridge running in the main world
+      const bridged = await requestCodeFromPageBridge(5000); // Increased timeout
       if (bridged?.code) {
         console.log('BetterLeetSync: Code extracted via page bridge');
+        console.log('BetterLeetSync: Language:', bridged.language, 'Length:', bridged.code.length);
         return bridged;
-      }
-
-      // Method 2: Try to get active editor directly  
-      if (window.monaco && window.monaco.editor) {
-        const getEditors = window.monaco.editor.getEditors;
-        if (getEditors && typeof getEditors === 'function') {
-          const editors = getEditors() || [];
-          console.log('BetterLeetSync: Found', editors.length, 'Monaco editors');
-          
-          for (const editor of editors) {
-            try {
-              if (!editor || typeof editor.getModel !== 'function') continue;
-              
-              const model = editor.getModel();
-              if (model && typeof model.getValue === 'function') {
-                const lang = model.getLanguageId?.() || 'unknown';
-                const code = model.getValue();
-                const uri = model.uri?.toString?.() || '';
-                
-                console.log('BetterLeetSync: Editor model:', lang, 'URI:', uri, 'Length:', code.length);
-                
-                // Skip CSS/icon files
-                if (uri.includes('codicon') || code.includes('.codicon-')) {
-                  continue;
-                }
-                
-                // Return first reasonable editor content
-                if (code && code.trim().length > 0) {
-                  console.log('BetterLeetSync: Code extracted from active editor');
-                  return { code, language: lang };
-                }
-              }
-            } catch (e) {
-              console.log('BetterLeetSync: Error checking editor:', e);
-            }
-          }
-        }
       }
 
       console.error('BetterLeetSync: Could not extract code from editor');
@@ -387,34 +316,52 @@
     try {
       const btn = document.createElement('button');
       btn.id = BUTTON_ID;
-      btn.textContent = '📤 Sync';
       btn.title = 'Sync solution to GitHub';
       
-      // Style the button
+      // Create logo and text
+      const logo = document.createElement('img');
+      logo.src = chrome.runtime.getURL('icons/icon16.png');
+      logo.style.cssText = `
+        width: 16px;
+        height: 16px;
+        margin-right: 6px;
+        vertical-align: middle;
+      `;
+      
+      const text = document.createElement('span');
+      text.textContent = 'Sync';
+      text.style.verticalAlign = 'middle';
+      
+      btn.appendChild(logo);
+      btn.appendChild(text);
+      
+      // Style the button - yellow and black theme
       btn.style.cssText = `
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        background: #FFA116;
+        color: #1a1a1a;
         border: none;
         padding: 8px 16px;
         border-radius: 6px;
         font-size: 14px;
-        font-weight: 600;
+        font-weight: 700;
         cursor: pointer;
         margin-left: 8px;
         transition: all 0.2s ease;
         box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        display: inline-flex;
+        align-items: center;
       `;
 
       btn.addEventListener('mouseenter', () => {
         btn.style.transform = 'translateY(-2px)';
-        btn.style.boxShadow = '0 4px 12px rgba(0, 184, 163, 0.5)';
-        btn.style.background = '#00d4bd';
+        btn.style.boxShadow = '0 4px 8px rgba(255, 161, 22, 0.4)';
+        btn.style.background = '#FFB84D';
       });
 
       btn.addEventListener('mouseleave', () => {
         btn.style.transform = 'translateY(0)';
-        btn.style.boxShadow = '0 2px 8px rgba(0, 184, 163, 0.3)';
-        btn.style.background = '#00b8a3';
+        btn.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+        btn.style.background = '#FFA116';
       });
 
       btn.addEventListener('click', syncSolution);
@@ -441,6 +388,9 @@
       return;
     }
 
+    // Inject page bridge early
+    ensurePageBridgeInjected();
+
     // Remove existing button if any
     const existingBtn = document.getElementById(BUTTON_ID);
     if (existingBtn) {
@@ -455,7 +405,9 @@
     const checkAndInject = () => {
       attempts++;
       
-      if (window.monaco && window.monaco.editor) {
+      // Always inject button, even if Monaco isn't visible in content script world
+      // (it exists in the main world where pageBridge can access it)
+      if (attempts >= 2) {
         injectSyncButton();
       } else if (attempts < maxAttempts) {
         setTimeout(checkAndInject, 500);
